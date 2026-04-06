@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palworld Breeding Lab</title>
+    <link rel="stylesheet" href="styles.css?v=20260330h">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero panel">
+            <p class="eyebrow">Breeding Lab</p>
+            <h1>Palworld Breeding Lab</h1>
+            <p class="hero-copy">
+                Search any breedable Pal from your extracted game data and inspect every parent pair that produces it.
+            </p>
+            <div class="hero-meta">
+                <span id="data-status" class="pill pill-status">Loading local data...</span>
+                <span id="data-generated" class="pill pill-muted"></span>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="panel search-panel">
+                <div class="panel-header">
+                    <p class="eyebrow">Search</p>
+                </div>
+
+                <label class="search-label" for="pal-search">Pal name</label>
+                <div class="combobox" id="pal-combobox">
+                    <div class="search-row">
+                        <input
+                            id="pal-search"
+                            class="search-input"
+                            type="search"
+                            autocomplete="off"
+                            spellcheck="false"
+                            placeholder="Type a Pal name">
+                        <button id="clear-search" class="clear-button" type="button">Clear</button>
+                    </div>
+                    <div id="pal-suggestions" class="suggestions" role="listbox" hidden></div>
+                </div>
+
+                <div class="trace-toolbar search-toolbar">
+                    <label class="trace-control">
+                        <span class="summary-label">Work Suitability</span>
+                        <select id="search-work-suitability" class="trace-select">
+                            <option value="">Any Suitability</option>
+                            <option value="Kindling">Kindling</option>
+                            <option value="Watering">Watering</option>
+                            <option value="Seeding">Planting</option>
+                            <option value="GenerateElectricity">Electricity</option>
+                            <option value="Handcraft">Handiwork</option>
+                            <option value="Gather">Gathering</option>
+                            <option value="Lumbering">Lumbering</option>
+                            <option value="Mining">Mining</option>
+                            <option value="MedicineProduction">Medicine</option>
+                            <option value="Cooling">Cooling</option>
+                            <option value="Transport">Transport</option>
+                            <option value="Farming">Farming</option>
+                            <option value="OilExtraction">Oil</option>
+                        </select>
+                    </label>
+                    <label class="trace-control">
+                        <span class="summary-label">Work Level</span>
+                        <select id="search-work-level" class="trace-select">
+                            <option value="">Any Level</option>
+                            <option value="1">Level 1</option>
+                            <option value="2">Level 2</option>
+                            <option value="3">Level 3</option>
+                            <option value="4">Level 4</option>
+                        </select>
+                    </label>
+                    <label class="trace-control">
+                        <span class="summary-label">Rarity</span>
+                        <select id="search-rarity" class="trace-select">
+                            <option value="">Any Rarity</option>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel summary-panel" id="summary-panel" hidden>
+                <div class="panel-header">
+                    <p class="eyebrow">Selection</p>
+                    <h2 id="selected-pal-name">No Pal selected</h2>
+                </div>
+
+                <div class="summary-grid">
+                    <div class="summary-card summary-card-advanced">
+                        <span class="summary-label">Rarity</span>
+                        <span id="selected-pal-rarity" class="summary-value">-</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="summary-label">All Combinations</span>
+                        <span id="selected-pal-count" class="summary-value">-</span>
+                    </div>
+                </div>
+
+                <div class="trace-toolbar">
+                    <button id="trace-back-button" class="action-button" type="button">Best Route</button>
+                    <label class="trace-control">
+                        <span class="summary-label">Optimize By</span>
+                        <select id="trace-sort-mode" class="trace-select">
+                            <option value="rarity">Lowest Total Rarity</option>
+                            <option value="generations">Fewest Generations</option>
+                        </select>
+                    </label>
+                    <label class="trace-control">
+                        <span class="summary-label">Max Generations</span>
+                        <select id="trace-max-depth" class="trace-select">
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4" selected>4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                        </select>
+                    </label>
+                    <label class="trace-control">
+                        <span class="summary-label">Required Base Pal</span>
+                        <select id="trace-required-base-pal" class="trace-select">
+                            <option value="">Any Base Pal</option>
+                        </select>
+                    </label>
+                    <label class="trace-toggle" for="hide-advanced-info">
+                        <input id="hide-advanced-info" type="checkbox">
+                        <span>Hide Advanced Info</span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel empty-panel" id="empty-panel">
+                <p class="eyebrow">Ready</p>
+                <h2>Pick a Pal to inspect its breeding routes.</h2>
+                <p>
+                    Results will include every inferred parent pair in the extracted dataset, with gender requirements shown when the game specifies them.
+                </p>
+            </section>
+
+            <section class="panel results-panel" id="results-panel" hidden>
+                <div class="results-header">
+                    <div>
+                        <p class="eyebrow">Combinations</p>
+                        <h2 id="results-title">0 combinations</h2>
+                    </div>
+                    <div class="section-actions">
+                        <div class="results-stats">
+                            <div class="results-stat">
+                                <span class="results-stat-label">Unique</span>
+                                <span id="unique-count" class="results-stat-value">0</span>
+                            </div>
+                            <div class="results-stat">
+                                <span class="results-stat-label">Formula</span>
+                                <span id="formula-count" class="results-stat-value">0</span>
+                            </div>
+                        </div>
+                        <button id="results-toggle" class="section-toggle" type="button" aria-controls="results-body" aria-expanded="true">Collapse</button>
+                    </div>
+                </div>
+
+                <div id="results-body" class="section-body">
+                    <div id="results-list" class="results-list"></div>
+                </div>
+            </section>
+
+            <section class="panel trace-panel" id="trace-panel" hidden>
+                <div class="trace-header">
+                    <div>
+                        <p class="eyebrow">Best Route</p>
+                        <h2 id="trace-title">Route Trace</h2>
+                    </div>
+                    <div class="section-actions section-actions-trace">
+                        <div id="trace-status" class="trace-status">Choose a Pal to build its best route.</div>
+                        <button id="trace-toggle" class="section-toggle" type="button" aria-controls="trace-body" aria-expanded="true">Collapse</button>
+                    </div>
+                </div>
+
+                <div id="trace-body" class="section-body">
+                    <div id="trace-list" class="trace-list"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <template id="suggestion-template">
+        <button class="suggestion" type="button" role="option">
+            <span class="suggestion-main"></span>
+            <span class="suggestion-meta"></span>
+        </button>
+    </template>
+
+    <template id="result-card-template">
+        <article class="result-card">
+            <div class="parent-block">
+                <span class="parent-kicker">Parent A</span>
+                <h3 class="parent-name"></h3>
+                <p class="parent-meta"></p>
+                <div class="parent-badges"></div>
+            </div>
+
+            <div class="operator">+</div>
+
+            <div class="parent-block">
+                <span class="parent-kicker">Parent B</span>
+                <h3 class="parent-name"></h3>
+                <p class="parent-meta"></p>
+                <div class="parent-badges"></div>
+            </div>
+        </article>
+    </template>
+
+    <script src="app.js?v=20260330h"></script>
+</body>
+</html>
