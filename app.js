@@ -655,6 +655,7 @@ function filterCandidates(query) {
 function renderSuggestions() {
     const suggestions = state.filteredCandidates;
     const filters = buildSearchFilters();
+    const previousScrollTop = elements.suggestions.querySelector(".suggestions-list")?.scrollTop ?? 0;
     elements.suggestions.replaceChildren();
 
     if (suggestions.length === 0) {
@@ -662,28 +663,70 @@ function renderSuggestions() {
         return;
     }
 
+    state.activeSuggestionIndex = getNormalizedActiveSuggestionIndex(suggestions);
+
+    const layout = document.createElement("div");
+    layout.className = "suggestions-layout";
+
+    const list = document.createElement("div");
+    list.className = "suggestions-list";
+
     const fragment = document.createDocumentFragment();
+    let activeNode = null;
 
     suggestions.forEach((candidate, index) => {
         const node = elements.suggestionTemplate.content.firstElementChild.cloneNode(true);
+        const isActive = index === state.activeSuggestionIndex;
         node.querySelector(".suggestion-main").replaceChildren(
             createPalIdentity(candidate, { variant: "suggestion", link: false, tooltip: false, loading: "eager" })
         );
         node.querySelector(".suggestion-meta").textContent = buildSuggestionMeta(candidate, filters);
         node.dataset.id = candidate.id;
-        node.setAttribute("aria-selected", String(index === state.activeSuggestionIndex));
-        node.classList.toggle("is-active", index === state.activeSuggestionIndex);
+        node.id = `pal-suggestion-${candidate.id}`;
+        node.setAttribute("aria-selected", String(isActive));
+        node.classList.toggle("is-active", isActive);
+        node.addEventListener("mouseenter", () => {
+            if (index === state.activeSuggestionIndex) {
+                return;
+            }
+
+            state.activeSuggestionIndex = index;
+            renderSuggestions();
+        });
+        node.addEventListener("focus", () => {
+            if (index === state.activeSuggestionIndex) {
+                return;
+            }
+
+            state.activeSuggestionIndex = index;
+            renderSuggestions();
+        });
         node.addEventListener("click", () => selectCandidate(candidate.id));
+
+        if (isActive) {
+            activeNode = node;
+        }
+
         fragment.appendChild(node);
     });
 
-    elements.suggestions.appendChild(fragment);
+    list.appendChild(fragment);
+    layout.append(
+        list,
+        buildSuggestionPreview(getActiveSuggestionCandidate(suggestions))
+    );
+
+    elements.suggestions.appendChild(layout);
     elements.suggestions.hidden = false;
+    list.scrollTop = previousScrollTop;
+    activeNode?.scrollIntoView({ block: "nearest" });
+    updateSearchInputSuggestionState(activeNode?.id ?? "");
 }
 
 function hideSuggestions() {
     elements.suggestions.hidden = true;
     elements.suggestions.replaceChildren();
+    updateSearchInputSuggestionState("");
 }
 
 function clearSelection() {
@@ -758,6 +801,53 @@ function buildSuggestionMeta(candidate, filters) {
     }
 
     return parts.join(" · ");
+}
+
+function getNormalizedActiveSuggestionIndex(suggestions = state.filteredCandidates) {
+    if (suggestions.length === 0) {
+        return -1;
+    }
+
+    if (state.activeSuggestionIndex >= 0 && state.activeSuggestionIndex < suggestions.length) {
+        return state.activeSuggestionIndex;
+    }
+
+    return 0;
+}
+
+function getActiveSuggestionCandidate(suggestions = state.filteredCandidates) {
+    const index = getNormalizedActiveSuggestionIndex(suggestions);
+    return index >= 0 ? suggestions[index] ?? null : null;
+}
+
+function buildSuggestionPreview(candidate) {
+    const preview = document.createElement("aside");
+    preview.className = "suggestion-preview";
+
+    if (!candidate) {
+        return preview;
+    }
+
+    const label = document.createElement("p");
+    label.className = "suggestion-preview-label";
+    label.textContent = "Preview";
+
+    const panel = buildPalTooltipCard(candidate);
+    panel.classList.add("suggestion-preview-card");
+
+    preview.append(label, panel);
+    return preview;
+}
+
+function updateSearchInputSuggestionState(activeOptionId) {
+    elements.searchInput.setAttribute("aria-controls", "pal-suggestions");
+    elements.searchInput.setAttribute("aria-expanded", String(!elements.suggestions.hidden));
+
+    if (activeOptionId) {
+        elements.searchInput.setAttribute("aria-activedescendant", activeOptionId);
+    } else {
+        elements.searchInput.removeAttribute("aria-activedescendant");
+    }
 }
 
 function selectCandidate(candidateId, options = { syncHash: true }) {

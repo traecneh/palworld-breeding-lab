@@ -246,11 +246,7 @@ body::before {
     left: 0;
     right: 0;
     z-index: 20;
-    display: grid;
-    gap: 8px;
-    max-height: 380px;
-    padding: 10px;
-    overflow: auto;
+    padding: 12px;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-md);
     background: var(--panel-strong);
@@ -259,6 +255,21 @@ body::before {
 
 .suggestions[hidden] {
     display: none !important;
+}
+
+.suggestions-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.suggestions-list {
+    display: grid;
+    gap: 8px;
+    max-height: 380px;
+    overflow: auto;
+    padding-right: 4px;
 }
 
 .suggestion {
@@ -288,6 +299,25 @@ body::before {
 .suggestion-meta {
     color: var(--muted);
     font-size: 0.9rem;
+}
+
+.suggestion-preview {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.suggestion-preview-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.suggestion-preview-card {
+    min-height: 100%;
 }
 
 .pal-identity {
@@ -1628,6 +1658,15 @@ body::before {
 }
 
 @media (max-width: 900px) {
+    .suggestions-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .suggestions-list {
+        max-height: 240px;
+        padding-right: 0;
+    }
+
     .results-header,
     .trace-header,
     .trace-route-summary,
@@ -1721,6 +1760,10 @@ body::before {
 
     .search-row {
         grid-template-columns: 1fr;
+    }
+
+    .suggestions {
+        padding: 10px;
     }
 
     .summary-grid,
