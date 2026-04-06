@@ -261,13 +261,15 @@ body::before {
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
     gap: 12px;
-    align-items: start;
+    align-items: stretch;
 }
 
 .suggestions-list {
     display: grid;
+    align-content: start;
     gap: 8px;
-    max-height: 380px;
+    min-height: 100%;
+    max-height: min(68vh, 520px);
     overflow: auto;
     padding-right: 4px;
 }
@@ -305,6 +307,10 @@ body::before {
     display: grid;
     gap: 8px;
     min-width: 0;
+    min-height: 0;
+    max-height: min(68vh, 520px);
+    overflow: auto;
+    padding-right: 4px;
 }
 
 .suggestion-preview-label {
