@@ -4,6 +4,8 @@ const DATA_URL = "./data/palworld-breeding-data.json";
 const DATA_BASE_URL = new URL(DATA_URL, window.location.href);
 const COMMON_RARITY_MAX = 3;
 const SELF_PAIR_BASE_RARITY_MAX = 7;
+const PAL_TOOLTIP_OFFSET = 14;
+const PAL_TOOLTIP_VIEWPORT_MARGIN = 12;
 const DEPENDENCY_GRAPH_LAYOUT = Object.freeze({
     paddingX: 56,
     paddingY: 44,
@@ -57,7 +59,8 @@ const state = {
     bestTraceCache: new Map(),
     bestRouteCache: new Map(),
     routeSetCache: new Map(),
-    activeDependencyView: null
+    activeDependencyView: null,
+    palTooltip: null
 };
 
 const elements = {
@@ -101,6 +104,7 @@ document.addEventListener("DOMContentLoaded", initialize);
 
 async function initialize() {
     bindEvents();
+    initializePalTooltip();
     applyAdvancedInfoVisibility();
 
     try {
@@ -313,6 +317,17 @@ function normalizeCandidate(candidate, palMetadataByTribeId) {
         rarityValue,
         rarity: rarityValue === null ? null : describeRarity(rarityValue),
         workSuitabilities,
+        elementTypes: metadata?.elementTypes ?? [],
+        hp: metadata?.hp ?? null,
+        meleeAttack: metadata?.meleeAttack ?? null,
+        shotAttack: metadata?.shotAttack ?? null,
+        defense: metadata?.defense ?? null,
+        foodAmount: metadata?.foodAmount ?? null,
+        runSpeed: metadata?.runSpeed ?? null,
+        rideSprintSpeed: metadata?.rideSprintSpeed ?? null,
+        isNocturnal: metadata?.isNocturnal ?? false,
+        isPredator: metadata?.isPredator ?? false,
+        maleProbability: metadata?.maleProbability ?? null,
         searchText: buildCandidateSearchText(displayName, tribeName, workSuitabilities)
     };
 }
@@ -336,11 +351,47 @@ function buildPalMetadataLookup(pals) {
 
         lookup.set(tribeName, {
             rarityValue: Number(pal.Rarity ?? 0),
-            workSuitabilities
+            workSuitabilities,
+            elementTypes: buildPalElementTypes(pal),
+            hp: normalizePositiveNumber(pal.Hp),
+            meleeAttack: normalizePositiveNumber(pal.MeleeAttack),
+            shotAttack: normalizePositiveNumber(pal.ShotAttack),
+            defense: normalizePositiveNumber(pal.Defense),
+            foodAmount: normalizePositiveNumber(pal.FoodAmount),
+            runSpeed: normalizePositiveNumber(pal.RunSpeed),
+            rideSprintSpeed: normalizePositiveNumber(pal.RideSprintSpeed),
+            isNocturnal: Boolean(pal.IsNocturnal),
+            isPredator: Boolean(pal.IsPredator),
+            maleProbability: normalizePercentNumber(pal.MaleProbability)
         });
     }
 
     return lookup;
+}
+
+function buildPalElementTypes(pal) {
+    const elementTypes = [];
+
+    for (const rawValue of [pal?.ElementType1, pal?.ElementType2]) {
+        const value = String(rawValue ?? "").trim();
+        if (!value || value === "None" || elementTypes.includes(value)) {
+            continue;
+        }
+
+        elementTypes.push(value);
+    }
+
+    return elementTypes;
+}
+
+function normalizePositiveNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizePercentNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
 function resolveDataAssetUrl(relativePath) {
@@ -616,7 +667,7 @@ function renderSuggestions() {
     suggestions.forEach((candidate, index) => {
         const node = elements.suggestionTemplate.content.firstElementChild.cloneNode(true);
         node.querySelector(".suggestion-main").replaceChildren(
-            createPalIdentity(candidate, { variant: "suggestion", link: false, loading: "eager" })
+            createPalIdentity(candidate, { variant: "suggestion", link: false, tooltip: false, loading: "eager" })
         );
         node.querySelector(".suggestion-meta").textContent = buildSuggestionMeta(candidate, filters);
         node.dataset.id = candidate.id;
@@ -636,6 +687,7 @@ function hideSuggestions() {
 }
 
 function clearSelection() {
+    hidePalTooltip();
     state.selectedId = null;
     elements.searchInput.value = "";
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
@@ -714,6 +766,7 @@ function selectCandidate(candidateId, options = { syncHash: true }) {
         return;
     }
 
+    hidePalTooltip();
     state.selectedId = candidateId;
     elements.searchInput.value = candidate.displayName;
     hideSuggestions();
@@ -726,6 +779,7 @@ function selectCandidate(candidateId, options = { syncHash: true }) {
 }
 
 function renderIdleState() {
+    hidePalTooltip();
     elements.summaryPanel.hidden = true;
     elements.resultsPanel.hidden = true;
     elements.emptyPanel.hidden = false;
@@ -773,6 +827,7 @@ function renderEmptyResults(candidate) {
 }
 
 function renderLoadError(error) {
+    hidePalTooltip();
     elements.dataStatus.textContent = "Failed to load local breeding data";
     elements.dataGenerated.textContent = "";
     elements.summaryPanel.hidden = true;
@@ -2883,6 +2938,11 @@ function createPalIdentity(pal, options = {}) {
         label
     );
 
+    if (options.tooltip !== false && hasPalTooltipData(pal)) {
+        wrapper.classList.add("pal-identity-has-tooltip");
+        attachPalTooltip(wrapper, pal);
+    }
+
     return wrapper;
 }
 
@@ -2958,6 +3018,298 @@ function createPalLink(displayName) {
     link.rel = "noopener noreferrer";
     link.textContent = displayName;
     return link;
+}
+
+function hasPalTooltipData(pal) {
+    if (!pal) {
+        return false;
+    }
+
+    return (
+        (Array.isArray(pal.elementTypes) && pal.elementTypes.length > 0) ||
+        Number.isFinite(pal.hp) ||
+        Number.isFinite(pal.meleeAttack) ||
+        Number.isFinite(pal.shotAttack) ||
+        Number.isFinite(pal.defense) ||
+        Number.isFinite(pal.runSpeed) ||
+        Number.isFinite(pal.rideSprintSpeed) ||
+        Number.isFinite(pal.foodAmount) ||
+        buildActiveWorkSuitabilityEntries(pal).length > 0 ||
+        pal.isNocturnal ||
+        pal.isPredator ||
+        Number.isFinite(pal.maleProbability)
+    );
+}
+
+function initializePalTooltip() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "pal-tooltip";
+    tooltip.hidden = true;
+    tooltip.setAttribute("role", "tooltip");
+    document.body.appendChild(tooltip);
+
+    state.palTooltip = {
+        element: tooltip,
+        anchor: null,
+        palId: ""
+    };
+
+    window.addEventListener("scroll", handlePalTooltipViewportChange, { passive: true });
+    window.addEventListener("resize", handlePalTooltipViewportChange);
+    document.addEventListener("keydown", handlePalTooltipKeydown);
+}
+
+function attachPalTooltip(trigger, pal) {
+    trigger.addEventListener("mouseenter", () => {
+        showPalTooltip(trigger, pal);
+    });
+    trigger.addEventListener("mouseleave", hidePalTooltip);
+    trigger.addEventListener("focusin", () => {
+        showPalTooltip(trigger, pal);
+    });
+    trigger.addEventListener("focusout", (event) => {
+        if (trigger.contains(event.relatedTarget)) {
+            return;
+        }
+
+        hidePalTooltip();
+    });
+}
+
+function showPalTooltip(anchor, pal) {
+    if (!state.palTooltip || !anchor || !pal) {
+        return;
+    }
+
+    state.palTooltip.anchor = anchor;
+    state.palTooltip.palId = String(pal.id ?? "");
+    renderPalTooltipContent(pal);
+    state.palTooltip.element.hidden = false;
+    positionPalTooltip();
+}
+
+function hidePalTooltip() {
+    if (!state.palTooltip) {
+        return;
+    }
+
+    state.palTooltip.anchor = null;
+    state.palTooltip.palId = "";
+    state.palTooltip.element.hidden = true;
+    state.palTooltip.element.replaceChildren();
+}
+
+function handlePalTooltipViewportChange() {
+    if (!state.palTooltip || state.palTooltip.element.hidden) {
+        return;
+    }
+
+    if (!state.palTooltip.anchor || !state.palTooltip.anchor.isConnected) {
+        hidePalTooltip();
+        return;
+    }
+
+    positionPalTooltip();
+}
+
+function handlePalTooltipKeydown(event) {
+    if (event.key === "Escape") {
+        hidePalTooltip();
+    }
+}
+
+function renderPalTooltipContent(pal) {
+    if (!state.palTooltip) {
+        return;
+    }
+
+    state.palTooltip.element.replaceChildren(buildPalTooltipCard(pal));
+}
+
+function buildPalTooltipCard(pal) {
+    const panel = document.createElement("section");
+    panel.className = "pal-tooltip-panel";
+
+    const header = document.createElement("div");
+    header.className = "pal-tooltip-header";
+    header.appendChild(createPalIdentity(pal, {
+        variant: "tooltip",
+        link: false,
+        tooltip: false,
+        loading: "eager"
+    }));
+    panel.appendChild(header);
+
+    const meta = document.createElement("div");
+    meta.className = "pal-tooltip-chip-list";
+    for (const elementType of pal.elementTypes ?? []) {
+        meta.appendChild(createPalTooltipChip(elementType, "pal-tooltip-chip pal-tooltip-chip-element"));
+    }
+    if (pal.rarity) {
+        meta.appendChild(createBadge(
+            formatRarity(pal.rarity),
+            `badge badge-rarity ${pal.rarity.className}`));
+    }
+    if (meta.childElementCount > 0) {
+        panel.appendChild(meta);
+    }
+
+    const metrics = buildPalTooltipMetrics(pal);
+    if (metrics.length > 0) {
+        const metricGrid = document.createElement("div");
+        metricGrid.className = "pal-tooltip-metrics";
+        metrics.forEach((metric) => {
+            metricGrid.appendChild(createPalTooltipMetric(metric.label, metric.value));
+        });
+        panel.appendChild(metricGrid);
+    }
+
+    const workEntries = buildActiveWorkSuitabilityEntries(pal);
+    if (workEntries.length > 0) {
+        panel.appendChild(createPalTooltipSection(
+            "Work Suitability",
+            workEntries.map((entry) => createPalTooltipChip(
+                `${entry.label} Lv. ${entry.level}`,
+                "pal-tooltip-chip pal-tooltip-chip-work"
+            ))
+        ));
+    }
+
+    const traits = buildPalTooltipTraits(pal);
+    if (traits.length > 0) {
+        panel.appendChild(createPalTooltipSection(
+            "Traits",
+            traits.map((trait) => createPalTooltipChip(
+                trait,
+                "pal-tooltip-chip pal-tooltip-chip-trait"
+            ))
+        ));
+    }
+
+    return panel;
+}
+
+function buildPalTooltipMetrics(pal) {
+    const metrics = [
+        { label: "HP", value: pal.hp },
+        { label: "Melee", value: pal.meleeAttack },
+        { label: "Ranged", value: pal.shotAttack },
+        { label: "Defense", value: pal.defense },
+        { label: "Run Speed", value: pal.runSpeed },
+        { label: "Ride Sprint", value: pal.rideSprintSpeed },
+        { label: "Food", value: pal.foodAmount }
+    ];
+
+    return metrics
+        .filter((metric) => Number.isFinite(metric.value))
+        .map((metric) => ({
+            label: metric.label,
+            value: formatTooltipNumber(metric.value)
+        }));
+}
+
+function buildActiveWorkSuitabilityEntries(pal) {
+    return WORK_SUITABILITY_DEFINITIONS
+        .map((definition) => ({
+            key: definition.key,
+            label: definition.label,
+            level: Number(pal?.workSuitabilities?.[definition.key] ?? 0)
+        }))
+        .filter((entry) => entry.level > 0);
+}
+
+function buildPalTooltipTraits(pal) {
+    const traits = [];
+
+    if (pal.isNocturnal) {
+        traits.push("Nocturnal");
+    }
+
+    if (pal.isPredator) {
+        traits.push("Predator");
+    }
+
+    if (Number.isFinite(pal.maleProbability) && pal.maleProbability !== 50) {
+        traits.push(`${formatTooltipNumber(pal.maleProbability)}% Male`);
+    }
+
+    return traits;
+}
+
+function createPalTooltipSection(title, children) {
+    const section = document.createElement("section");
+    section.className = "pal-tooltip-section";
+
+    const label = document.createElement("p");
+    label.className = "pal-tooltip-section-label";
+    label.textContent = title;
+
+    const list = document.createElement("div");
+    list.className = "pal-tooltip-chip-list";
+    children.forEach((child) => {
+        list.appendChild(child);
+    });
+
+    section.append(label, list);
+    return section;
+}
+
+function createPalTooltipMetric(label, value) {
+    const item = document.createElement("div");
+    item.className = "pal-tooltip-metric";
+
+    const metricLabel = document.createElement("span");
+    metricLabel.className = "pal-tooltip-metric-label";
+    metricLabel.textContent = label;
+
+    const metricValue = document.createElement("span");
+    metricValue.className = "pal-tooltip-metric-value";
+    metricValue.textContent = value;
+
+    item.append(metricLabel, metricValue);
+    return item;
+}
+
+function createPalTooltipChip(text, className) {
+    const chip = document.createElement("span");
+    chip.className = className;
+    chip.textContent = text;
+    return chip;
+}
+
+function formatTooltipNumber(value) {
+    return Number(value).toLocaleString("en-US");
+}
+
+function positionPalTooltip() {
+    if (!state.palTooltip || state.palTooltip.element.hidden || !state.palTooltip.anchor) {
+        return;
+    }
+
+    const anchorRect = state.palTooltip.anchor.getBoundingClientRect();
+    const tooltipRect = state.palTooltip.element.getBoundingClientRect();
+
+    if (anchorRect.bottom < 0 || anchorRect.top > window.innerHeight) {
+        hidePalTooltip();
+        return;
+    }
+
+    let left = anchorRect.left + ((anchorRect.width - tooltipRect.width) / 2);
+    left = Math.max(
+        PAL_TOOLTIP_VIEWPORT_MARGIN,
+        Math.min(left, window.innerWidth - tooltipRect.width - PAL_TOOLTIP_VIEWPORT_MARGIN)
+    );
+
+    let top = anchorRect.bottom + PAL_TOOLTIP_OFFSET;
+    if (top + tooltipRect.height > window.innerHeight - PAL_TOOLTIP_VIEWPORT_MARGIN) {
+        top = anchorRect.top - tooltipRect.height - PAL_TOOLTIP_OFFSET;
+    }
+    if (top < PAL_TOOLTIP_VIEWPORT_MARGIN) {
+        top = PAL_TOOLTIP_VIEWPORT_MARGIN;
+    }
+
+    state.palTooltip.element.style.left = `${Math.round(left)}px`;
+    state.palTooltip.element.style.top = `${Math.round(top)}px`;
 }
 
 function formatRarity(rarity) {

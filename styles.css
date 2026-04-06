@@ -325,6 +325,15 @@ body::before {
     gap: 12px;
 }
 
+.pal-identity-tooltip {
+    --pal-avatar-size: 56px;
+    gap: 14px;
+}
+
+.pal-identity-has-tooltip {
+    position: relative;
+}
+
 .pal-avatar {
     position: relative;
     display: grid;
@@ -498,6 +507,118 @@ body::before {
 .pal-link:focus-visible {
     color: var(--accent-strong);
     text-decoration: underline;
+}
+
+.pal-tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 50;
+    width: min(360px, calc(100vw - 24px));
+    pointer-events: none;
+}
+
+.pal-tooltip[hidden] {
+    display: none;
+}
+
+.pal-tooltip-panel {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid rgba(141, 225, 212, 0.18);
+    border-radius: 22px;
+    background:
+        linear-gradient(180deg, rgba(18, 30, 33, 0.98), rgba(10, 19, 21, 0.96)),
+        radial-gradient(circle at top right, rgba(255, 151, 104, 0.12), transparent 42%);
+    box-shadow:
+        0 18px 40px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+}
+
+.pal-tooltip-header {
+    min-width: 0;
+}
+
+.pal-tooltip .pal-identity-label {
+    font-weight: 700;
+}
+
+.pal-tooltip-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pal-tooltip-chip,
+.pal-tooltip .badge {
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.pal-tooltip-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid transparent;
+}
+
+.pal-tooltip-chip-element {
+    color: #bcefe5;
+    border-color: rgba(141, 225, 212, 0.16);
+    background: rgba(24, 84, 74, 0.88);
+}
+
+.pal-tooltip-chip-work {
+    color: #d8fff8;
+    border-color: rgba(120, 154, 145, 0.2);
+    background: rgba(24, 42, 46, 0.92);
+}
+
+.pal-tooltip-chip-trait {
+    color: #ffe0be;
+    border-color: rgba(255, 151, 104, 0.16);
+    background: rgba(74, 43, 32, 0.9);
+}
+
+.pal-tooltip-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.pal-tooltip-metric {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(22, 36, 40, 0.84);
+}
+
+.pal-tooltip-metric-label,
+.pal-tooltip-section-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.pal-tooltip-metric-value {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+.pal-tooltip-section {
+    display: grid;
+    gap: 8px;
 }
 
 .mono {
@@ -1569,6 +1690,19 @@ body::before {
 @media (max-width: 640px) {
     .page-shell {
         padding: 18px 14px 40px;
+    }
+
+    .pal-tooltip {
+        width: min(94vw, 360px);
+    }
+
+    .pal-tooltip-panel {
+        padding: 14px;
+        gap: 10px;
+    }
+
+    .pal-tooltip-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .dependency-viewport {
