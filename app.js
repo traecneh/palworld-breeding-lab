@@ -71,6 +71,7 @@ const elements = {
     searchWorkSuitability: document.querySelector("#search-work-suitability"),
     searchWorkLevel: document.querySelector("#search-work-level"),
     searchRarity: document.querySelector("#search-rarity"),
+    searchDrop: document.querySelector("#search-drop"),
     suggestions: document.querySelector("#pal-suggestions"),
     suggestionTemplate: document.querySelector("#suggestion-template"),
     resultTemplate: document.querySelector("#result-card-template"),
@@ -134,6 +135,7 @@ function bindEvents() {
     elements.searchWorkSuitability.addEventListener("change", handleSearchInput);
     elements.searchWorkLevel.addEventListener("change", handleSearchInput);
     elements.searchRarity.addEventListener("change", handleSearchInput);
+    elements.searchDrop.addEventListener("change", handleSearchInput);
     elements.resultsToggle.addEventListener("click", () => toggleSectionCollapsed("results"));
     elements.traceToggle.addEventListener("click", () => toggleSectionCollapsed("trace"));
     elements.traceBackButton.addEventListener("click", handleTraceBack);
@@ -270,6 +272,7 @@ function buildLookupState(exportData) {
     state.routeSetCache.clear();
 
     populateSearchRarityOptions(candidates);
+    populateSearchDropOptions(candidates);
     populateRequiredBasePalOptions(candidates);
 }
 
@@ -462,6 +465,61 @@ function populateSearchRarityOptions(candidates) {
     if (rarityValues.includes(Number(previousValue))) {
         elements.searchRarity.value = previousValue;
     }
+}
+
+function populateSearchDropOptions(candidates) {
+    const previousValue = elements.searchDrop.value;
+    const dropOptionData = buildSearchDropOptionData(candidates);
+    elements.searchDrop.replaceChildren();
+
+    const anyOption = document.createElement("option");
+    anyOption.value = "";
+    anyOption.textContent = "Any Drop";
+    elements.searchDrop.appendChild(anyOption);
+
+    dropOptionData.forEach((drop) => {
+        const option = document.createElement("option");
+        option.value = drop.itemId;
+        option.textContent = `${drop.displayName} (${drop.count})`;
+        elements.searchDrop.appendChild(option);
+    });
+
+    if (dropOptionData.some((drop) => drop.itemId === previousValue)) {
+        elements.searchDrop.value = previousValue;
+    }
+}
+
+function buildSearchDropOptionData(candidates) {
+    const dropsByItemId = new Map();
+
+    candidates.forEach((candidate) => {
+        const seenForCandidate = new Set();
+        (candidate.possibleDrops ?? []).forEach((drop) => {
+            const itemId = String(drop?.itemId ?? "").trim();
+            const displayName = String(drop?.displayName ?? itemId).trim();
+            if (!itemId || !displayName || seenForCandidate.has(itemId)) {
+                return;
+            }
+
+            seenForCandidate.add(itemId);
+
+            if (!dropsByItemId.has(itemId)) {
+                dropsByItemId.set(itemId, {
+                    itemId,
+                    displayName,
+                    count: 0
+                });
+            }
+
+            dropsByItemId.get(itemId).count += 1;
+        });
+    });
+
+    return Array.from(dropsByItemId.values())
+        .sort((left, right) =>
+            left.displayName.localeCompare(right.displayName, "en", { sensitivity: "base" }) ||
+            left.itemId.localeCompare(right.itemId, "en", { sensitivity: "base" })
+        );
 }
 
 function describeRarity(rarityValue) {
@@ -749,11 +807,13 @@ function buildSearchFilters() {
     const workSuitability = elements.searchWorkSuitability.value;
     const workLevel = Number.parseInt(elements.searchWorkLevel.value, 10);
     const rarityValue = Number.parseInt(elements.searchRarity.value, 10);
+    const dropItemId = String(elements.searchDrop.value ?? "").trim();
 
     return {
         workSuitability,
         workLevel: Number.isFinite(workLevel) ? workLevel : null,
-        rarityValue: Number.isFinite(rarityValue) ? rarityValue : null
+        rarityValue: Number.isFinite(rarityValue) ? rarityValue : null,
+        dropItemId
     };
 }
 
@@ -762,7 +822,15 @@ function candidateMatchesSearchFilters(candidate, filters) {
         return false;
     }
 
+    if (filters.dropItemId && !candidateHasDrop(candidate, filters.dropItemId)) {
+        return false;
+    }
+
     return candidateMatchesWorkFilters(candidate, filters.workSuitability, filters.workLevel);
+}
+
+function candidateHasDrop(candidate, dropItemId) {
+    return (candidate.possibleDrops ?? []).some((drop) => drop?.itemId === dropItemId);
 }
 
 function candidateMatchesWorkFilters(candidate, workSuitability, workLevel) {
@@ -804,6 +872,13 @@ function buildSuggestionMeta(candidate, filters) {
 
         if (matches.length > 0) {
             parts.push(`${matches[0]} ${filters.workLevel}`);
+        }
+    }
+
+    if (filters.dropItemId) {
+        const drop = (candidate.possibleDrops ?? []).find((entry) => entry?.itemId === filters.dropItemId);
+        if (drop?.displayName) {
+            parts.push(`Drops ${drop.displayName}`);
         }
     }
 
