@@ -64,7 +64,6 @@ const state = {
 };
 
 const elements = {
-    pageShell: document.querySelector(".page-shell"),
     dataStatus: document.querySelector("#data-status"),
     dataGenerated: document.querySelector("#data-generated"),
     searchInput: document.querySelector("#pal-search"),
@@ -92,7 +91,6 @@ const elements = {
     traceSortMode: document.querySelector("#trace-sort-mode"),
     traceMaxDepth: document.querySelector("#trace-max-depth"),
     traceRequiredBasePal: document.querySelector("#trace-required-base-pal"),
-    hideAdvancedInfo: document.querySelector("#hide-advanced-info"),
     traceTitle: document.querySelector("#trace-title"),
     traceStatus: document.querySelector("#trace-status"),
     traceBody: document.querySelector("#trace-body"),
@@ -105,7 +103,6 @@ document.addEventListener("DOMContentLoaded", initialize);
 async function initialize() {
     bindEvents();
     initializePalTooltip();
-    applyAdvancedInfoVisibility();
 
     try {
         const response = await fetch(DATA_URL, { cache: "no-store" });
@@ -143,7 +140,6 @@ function bindEvents() {
     elements.traceSortMode.addEventListener("change", handleTraceSortModeChange);
     elements.traceMaxDepth.addEventListener("change", handleTraceDepthChange);
     elements.traceRequiredBasePal.addEventListener("change", handleTraceRequiredBasePalChange);
-    elements.hideAdvancedInfo.addEventListener("change", applyAdvancedInfoVisibility);
     elements.traceList.addEventListener("click", handleTraceListClick);
 
     document.addEventListener("click", (event) => {
@@ -323,8 +319,11 @@ function normalizeCandidate(candidate, palMetadataByTribeId) {
         shotAttack: metadata?.shotAttack ?? null,
         defense: metadata?.defense ?? null,
         foodAmount: metadata?.foodAmount ?? null,
+        walkSpeed: metadata?.walkSpeed ?? null,
         runSpeed: metadata?.runSpeed ?? null,
         rideSprintSpeed: metadata?.rideSprintSpeed ?? null,
+        workSpeed: metadata?.workSpeed ?? null,
+        possibleDrops: metadata?.possibleDrops ?? [],
         isNocturnal: metadata?.isNocturnal ?? false,
         isPredator: metadata?.isPredator ?? false,
         maleProbability: metadata?.maleProbability ?? null,
@@ -358,8 +357,11 @@ function buildPalMetadataLookup(pals) {
             shotAttack: normalizePositiveNumber(pal.ShotAttack),
             defense: normalizePositiveNumber(pal.Defense),
             foodAmount: normalizePositiveNumber(pal.FoodAmount),
+            walkSpeed: normalizePositiveNumber(pal.WalkSpeed),
             runSpeed: normalizePositiveNumber(pal.RunSpeed),
             rideSprintSpeed: normalizePositiveNumber(pal.RideSprintSpeed),
+            workSpeed: normalizeWorkSpeed(pal.CraftSpeed),
+            possibleDrops: normalizePalDropEntries(pal.PossibleDrops),
             isNocturnal: Boolean(pal.IsNocturnal),
             isPredator: Boolean(pal.IsPredator),
             maleProbability: normalizePercentNumber(pal.MaleProbability)
@@ -392,6 +394,11 @@ function normalizePositiveNumber(value) {
 function normalizePercentNumber(value) {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
+}
+
+function normalizeWorkSpeed(value) {
+    const parsed = normalizePositiveNumber(value);
+    return parsed === 100 ? null : parsed;
 }
 
 function resolveDataAssetUrl(relativePath) {
@@ -999,10 +1006,6 @@ function resetTracePanel(candidate = null) {
             : "Choose Best Route to build the recursive breeding chain.")
         : "Choose a Pal to build its best route.";
     setSectionCollapsed("trace", false);
-}
-
-function applyAdvancedInfoVisibility() {
-    elements.pageShell.classList.toggle("hide-advanced-info", elements.hideAdvancedInfo.checked);
 }
 
 function readTraceSortMode() {
@@ -3121,9 +3124,12 @@ function hasPalTooltipData(pal) {
         Number.isFinite(pal.meleeAttack) ||
         Number.isFinite(pal.shotAttack) ||
         Number.isFinite(pal.defense) ||
+        Number.isFinite(pal.walkSpeed) ||
         Number.isFinite(pal.runSpeed) ||
         Number.isFinite(pal.rideSprintSpeed) ||
+        Number.isFinite(pal.workSpeed) ||
         Number.isFinite(pal.foodAmount) ||
+        (Array.isArray(pal.possibleDrops) && pal.possibleDrops.length > 0) ||
         buildActiveWorkSuitabilityEntries(pal).length > 0 ||
         pal.isNocturnal ||
         pal.isPredator ||
@@ -3265,6 +3271,17 @@ function buildPalTooltipCard(pal) {
         ));
     }
 
+    const possibleDrops = buildPalTooltipDropEntries(pal);
+    if (possibleDrops.length > 0) {
+        panel.appendChild(createPalTooltipSection(
+            "Possible Drops",
+            possibleDrops.map((drop) => createPalTooltipChip(
+                formatPalTooltipDrop(drop),
+                "pal-tooltip-chip"
+            ))
+        ));
+    }
+
     const traits = buildPalTooltipTraits(pal);
     if (traits.length > 0) {
         panel.appendChild(createPalTooltipSection(
@@ -3285,8 +3302,10 @@ function buildPalTooltipMetrics(pal) {
         { label: "Melee", value: pal.meleeAttack },
         { label: "Ranged", value: pal.shotAttack },
         { label: "Defense", value: pal.defense },
+        { label: "Walk Speed", value: pal.walkSpeed },
         { label: "Run Speed", value: pal.runSpeed },
         { label: "Ride Sprint", value: pal.rideSprintSpeed },
+        { label: "Work Speed", value: pal.workSpeed },
         { label: "Food", value: pal.foodAmount }
     ];
 
@@ -3324,6 +3343,14 @@ function buildPalTooltipTraits(pal) {
     }
 
     return traits;
+}
+
+function buildPalTooltipDropEntries(pal) {
+    if (!Array.isArray(pal?.possibleDrops)) {
+        return [];
+    }
+
+    return pal.possibleDrops.filter((drop) => drop && drop.displayName);
 }
 
 function createPalTooltipSection(title, children) {
@@ -3369,6 +3396,83 @@ function createPalTooltipChip(text, className) {
 
 function formatTooltipNumber(value) {
     return Number(value).toLocaleString("en-US");
+}
+
+function formatTooltipPercent(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return "";
+    }
+
+    return Number.isInteger(numericValue)
+        ? numericValue.toLocaleString("en-US")
+        : numericValue.toLocaleString("en-US", { maximumFractionDigits: 1 });
+}
+
+function normalizePalDropEntries(drops) {
+    if (!Array.isArray(drops)) {
+        return [];
+    }
+
+    return drops
+        .map((drop) => {
+            const itemId = String(drop?.ItemId ?? "").trim();
+            const displayName = String(drop?.DisplayName ?? itemId).trim();
+            const dropRate = Number(drop?.DropRate ?? 0);
+            const minCount = Number(drop?.MinCount ?? 0);
+            const maxCount = Number(drop?.MaxCount ?? 0);
+            const minLevel = Number(drop?.MinLevel ?? 0);
+
+            if (!displayName || !Number.isFinite(dropRate) || dropRate <= 0) {
+                return null;
+            }
+
+            return {
+                itemId,
+                displayName,
+                dropRate,
+                minCount: Number.isFinite(minCount) ? minCount : 0,
+                maxCount: Number.isFinite(maxCount) ? maxCount : 0,
+                minLevel: Number.isFinite(minLevel) ? minLevel : 0
+            };
+        })
+        .filter(Boolean);
+}
+
+function formatPalTooltipDrop(drop) {
+    const quantityText = formatPalTooltipDropQuantity(drop.minCount, drop.maxCount);
+    const rateText = formatTooltipPercent(drop.dropRate);
+    const levelText = Number.isFinite(drop.minLevel) && drop.minLevel > 0
+        ? `, Lv. ${formatTooltipNumber(drop.minLevel)}+`
+        : "";
+    const suffixParts = [];
+
+    if (quantityText) {
+        suffixParts.push(quantityText);
+    }
+
+    if (rateText) {
+        suffixParts.push(`${rateText}%`);
+    }
+
+    const suffix = suffixParts.length > 0
+        ? ` (${suffixParts.join(", ")}${levelText})`
+        : (levelText ? ` (${levelText.slice(2)})` : "");
+
+    return `${drop.displayName}${suffix}`;
+}
+
+function formatPalTooltipDropQuantity(minCount, maxCount) {
+    if (!Number.isFinite(minCount) || !Number.isFinite(maxCount) || maxCount <= 0) {
+        return "";
+    }
+
+    if (minCount > 0 && minCount === maxCount) {
+        return `x${formatTooltipNumber(minCount)}`;
+    }
+
+    const minimum = minCount > 0 ? formatTooltipNumber(minCount) : "0";
+    return `x${minimum}-${formatTooltipNumber(maxCount)}`;
 }
 
 function positionPalTooltip() {
