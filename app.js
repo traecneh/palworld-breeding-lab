@@ -696,6 +696,7 @@ function filterCandidates(query) {
     if (!query) {
         return state.candidates
             .filter((candidate) => candidateMatchesSearchFilters(candidate, filters))
+            .sort(compareSuggestionCandidates)
             .slice(0, 14);
     }
 
@@ -713,6 +714,9 @@ function filterCandidates(query) {
             contains.push(candidate);
         }
     }
+
+    startsWith.sort(compareSuggestionCandidates);
+    contains.sort(compareSuggestionCandidates);
 
     return startsWith.concat(contains).slice(0, 14);
 }
@@ -3605,6 +3609,11 @@ function cleanDisplayName(displayName, fallbackIdentifier) {
 function compareCandidates(left, right) {
     return left.displayName.localeCompare(right.displayName) ||
         left.tribeName.localeCompare(right.tribeName);
+}
+
+function compareSuggestionCandidates(left, right) {
+    return getComparableRarity(left.rarityValue) - getComparableRarity(right.rarityValue) ||
+        compareCandidates(left, right);
 }
 
 function comparePairs(left, right) {
